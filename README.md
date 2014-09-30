@@ -6,7 +6,7 @@ Thanks goes out to the WhatsAPI team @ https://github.com/venomous0x/WhatsAPI fo
 
 HowTo
 =================
-
+```
 final WAClient client = new WAClient("YOUR_NUMBER_WITHOUT_PLUS", "PASSWORD_IN_BASE64", "DISPLAY NAME");
 client.connect(new WAConnectCallback()
 {
@@ -31,3 +31,4 @@ client.connect(new WAConnectCallback()
 		System.out.println("Couldn't conenct :-(");
 	}
 });
+```
