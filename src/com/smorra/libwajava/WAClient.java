@@ -92,6 +92,27 @@ public class WAClient implements WACallbackRaw
 		client.write(WAElement.fromString("<presence type='active'></presence>"));
 	}
 
+	public void getLastSeen(String phoneNumber, WALastSeenCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
+	{
+		callbacks.add(callback);
+		client.write(WAElement.fromString("<iq to='" + phoneNumber + "@s.whatsapp.net' type='get' id='lastseen' xmlns='jabber:iq:last'><query/></iq>"));
+
+	}
+
+	public void getStatus(String phoneNumber, WAStatusCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
+	{
+		callbacks.add(callback);
+		String str = "<iq to='s.whatsapp.net' type='get' xmlns='status' id='getstatus'>";
+		str += "<status><user jid='" + phoneNumber + "@s.whatsapp.net'/></status>";
+		str += "</iq>";
+		client.write(WAElement.fromString(str));
+	}
+
+	public void sendTyping(String phoneNumber) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
+	{
+		client.write(WAElement.fromString("<chatstate to='" + phoneNumber + "@s.whatsapp.net'><composing/></chatstate>"));
+	}
+
 	public void sendMessage(String to, String body) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
 	{
 		String str = "<message to='" + to + "@s.whatsapp.net' type='text' id='message-1410987641-1' t='1410987641'>";
@@ -172,7 +193,21 @@ public class WAClient implements WACallbackRaw
 			{
 				String id = new String(element.getAttributeByName("id".getBytes()).value, "UTF-8");
 				System.out.println("IQ WITH ID " + id);
-				if (id.equals("getgroups-participating"))
+				if (id.equals("getstatus"))
+				{
+					WAStatusCallback callback = (WAStatusCallback) callbacks.poll();
+					WAElement statusElement = element.getChildrenByName("status".getBytes()).get(0);
+					WAElement userElement = statusElement.getChildrenByName("user".getBytes()).get(0);
+					Date d = new Date(Integer.valueOf(new String(userElement.getAttributeByName("t".getBytes()).value, "UTF-8")) * 1000L);
+					callback.onStatus(d, userElement.text);
+				}
+				else if (id.equals("lastseen"))
+				{
+					WALastSeenCallback callback = (WALastSeenCallback) callbacks.poll();
+					WAElement queryElement = element.getChildrenByName("query".getBytes()).get(0);
+					callback.onLastSeen(Integer.parseInt(new String(queryElement.getAttributeByName("seconds".getBytes()).value, "UTF-8")));
+				}
+				else if (id.equals("getgroups-participating"))
 				{
 					ArrayList<WAGroup> para = new ArrayList<WAGroup>();
 
