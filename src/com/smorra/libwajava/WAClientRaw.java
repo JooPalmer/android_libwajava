@@ -14,11 +14,12 @@ import org.xml.sax.SAXException;
 
 import com.smorra.asyncsocket.TcpClient;
 import com.smorra.asyncsocket.TcpClientCallback;
+import com.smorra.libwajava.callbacks.WARawCallback;
 
 public class WAClientRaw implements TcpClientCallback
 {
 	TcpClient tcpClient;
-	WACallbackRaw callback;
+	WARawCallback callback;
 	private static final String WHATSAPP_DEVICE = "Android";
 	private static final String WHATSAPP_VER = "2.11.378";
 	private static final String WHATSAPP_HOST = "c.whatsapp.net";
@@ -30,7 +31,7 @@ public class WAClientRaw implements TcpClientCallback
 	private WAKeyStream outputKeystream;
 	private boolean encrypt = false;
 
-	public WAClientRaw(WACallbackRaw callback) throws IOException
+	public WAClientRaw(WARawCallback callback) throws IOException
 	{
 		tcpClient = new TcpClient(this, WHATSAPP_HOST, PORT);
 		this.callback = callback;

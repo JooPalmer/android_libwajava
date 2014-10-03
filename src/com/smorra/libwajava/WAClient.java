@@ -12,6 +12,7 @@ import javax.xml.parsers.ParserConfigurationException;
 import org.xml.sax.SAXException;
 
 import com.smorra.libwajava.WAMessage.Type;
+import com.smorra.libwajava.callbacks.WAAddParticipantsCallback;
 import com.smorra.libwajava.callbacks.WAConnectCallback;
 import com.smorra.libwajava.callbacks.WACreateGroupCallback;
 import com.smorra.libwajava.callbacks.WADisconnectCallback;
@@ -20,6 +21,7 @@ import com.smorra.libwajava.callbacks.WAGroupCallback;
 import com.smorra.libwajava.callbacks.WAIqCallback;
 import com.smorra.libwajava.callbacks.WALastSeenCallback;
 import com.smorra.libwajava.callbacks.WAMessageCallback;
+import com.smorra.libwajava.callbacks.WARawCallback;
 import com.smorra.libwajava.callbacks.WAReceiptCallback;
 import com.smorra.libwajava.callbacks.WAStatusCallback;
 import com.smorra.libwajava.callbacks.WAConnectCallback.Reason;
@@ -27,7 +29,7 @@ import com.smorra.libwajava.callbacks.WAConnectCallback.Reason;
 import android.util.Base64;
 import android.util.Pair;
 
-public class WAClient implements WACallbackRaw
+public class WAClient implements WARawCallback
 {
 	WAClientRaw client;
 	String phoneNumber;
@@ -109,6 +111,20 @@ public class WAClient implements WACallbackRaw
 		String id = generateId("setstatus-");
 		cbs.put(id, callback);
 		client.write(WAElement.fromString("<iq to='s.whatsapp.net' type='set' id='" + id + "' xmlns='status'><status>" + WAUtil.xmlEncode(status) + "</status></iq>"));
+	}
+
+	public void addParticipants(String groupId, ArrayList<String> participants, WAAddParticipantsCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
+	{
+		String id = generateId("addparticipants-");
+		String cmd = "<iq id='" + id + "' type='set' xmlns='w:g' to='" + groupId + "@g.us'>";
+		cmd += "<add>";
+		for (String participant : participants)
+		{
+			cmd += "<participant jid='" + WAUtil.xmlEncode(participant) + "@s.whatsapp.net'/>";
+		}
+		cmd += "</add></iq>";
+		cbs.put(id, Pair.create(callback, participants));
+		client.write(WAElement.fromString(cmd));
 	}
 
 	public void createGroup(String subject, WACreateGroupCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
@@ -231,6 +247,34 @@ public class WAClient implements WACallbackRaw
 					WAElement userElement = statusElement.getChildrenByName("user".getBytes()).get(0);
 					Date d = new Date(Integer.valueOf(new String(userElement.getAttributeByName("t".getBytes()).value, "UTF-8")) * 1000L);
 					callback.onStatus(d, new String(userElement.text, "UTF-8"));
+				}
+				else if (id.startsWith("addparticipants-"))
+				{
+					Pair<?, ?> pair = (Pair<?, ?>) cbs.remove(id);
+					WAAddParticipantsCallback callback = (WAAddParticipantsCallback) pair.first;
+					ArrayList<?> participants = (ArrayList<?>) pair.second;
+					ArrayList<WAElement> adds = element.getChildrenByName("add".getBytes());
+					ArrayList<Boolean> result = new ArrayList<Boolean>();
+					for (Object participant : participants)
+					{
+						String p = (String) participant;
+						boolean found = false;
+						for (WAElement add : adds)
+						{
+							String phoneNumber = new String(add.getAttributeByName("participant".getBytes()).value, "UTF-8");
+							phoneNumber = phoneNumber.substring(0, phoneNumber.indexOf('@'));
+							String type = new String(add.getAttributeByName("type".getBytes()).value, "UTF-8");
+							if (phoneNumber.equals(p))
+							{
+								result.add(type.equals("success"));
+								found = true;
+								break;
+							}
+						}
+						if (!found)
+							result.add(false);
+					}
+					callback.onSuccess(result);
 				}
 				else if (id.startsWith("creategroup-"))
 				{
