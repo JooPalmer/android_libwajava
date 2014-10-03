@@ -23,6 +23,7 @@ import com.smorra.libwajava.callbacks.WALastSeenCallback;
 import com.smorra.libwajava.callbacks.WAMessageCallback;
 import com.smorra.libwajava.callbacks.WARawCallback;
 import com.smorra.libwajava.callbacks.WAReceiptCallback;
+import com.smorra.libwajava.callbacks.WASetSubjectCallback;
 import com.smorra.libwajava.callbacks.WAStatusCallback;
 import com.smorra.libwajava.callbacks.WAConnectCallback.Reason;
 
@@ -150,6 +151,16 @@ public class WAClient implements WARawCallback
 
 	}
 
+	public void setSubject(String gid, String subject, WASetSubjectCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
+	{
+		String id = generateId("setsubject-");
+		String cmd = "<iq id='" + id + "' type='set' to='" + WAUtil.xmlEncode(gid) + "@g.us' xmlns='w:g'>";
+		cmd += "<subject value='" + WAUtil.xmlEncode(subject) + "'/>";
+		cmd += "</iq>";
+		cbs.put(id, callback);
+		client.write(WAElement.fromString(cmd));
+	}
+
 	public void getStatus(String phoneNumber, WAStatusCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
 	{
 		String id = generateId("getstatus-");
@@ -202,7 +213,7 @@ public class WAClient implements WARawCallback
 			{
 				String str = "<presence name='" + WAUtil.xmlEncode(displayName) + "'></presence>";
 				client.write(WAElement.fromString(str));
-				connectCallback.onConnect();
+				connectCallback.onConnectSuccess();
 
 			}
 			else if (name.equals("failure"))
@@ -249,6 +260,12 @@ public class WAClient implements WARawCallback
 					Date d = new Date(Integer.valueOf(new String(userElement.getAttributeByName("t".getBytes()).value, "UTF-8")) * 1000L);
 					callback.onStatus(d, new String(userElement.text, "UTF-8"));
 				}
+				else if (id.startsWith("setsubject-"))
+				{
+					WASetSubjectCallback callback = (WASetSubjectCallback) cbs.remove(id);
+					if (callback != null)
+						callback.onSetSubjectSuccess();
+				}
 				else if (id.startsWith("addparticipants-"))
 				{
 					Pair<?, ?> pair = (Pair<?, ?>) cbs.remove(id);
@@ -256,7 +273,7 @@ public class WAClient implements WARawCallback
 					String[] participants = (String[]) pair.second;
 					if (type.equals("error"))
 					{
-						callback.onError();
+						callback.onAddParticipantsError();
 					}
 					else
 					{
@@ -285,14 +302,14 @@ public class WAClient implements WARawCallback
 								pos++;
 							}
 						}
-						callback.onSuccess(result);
+						callback.onAddParticipantsSuccess(result);
 					}
 				}
 				else if (id.startsWith("creategroup-"))
 				{
 					WACreateGroupCallback callback = (WACreateGroupCallback) cbs.remove(id);
 					WAElement groupElement = element.getChildrenByName("group".getBytes()).get(0);
-					callback.onCreateGroup(new String(groupElement.getAttributeByName("id".getBytes()).value, "UTF-8"));
+					callback.onCreateGroupSuccess(new String(groupElement.getAttributeByName("id".getBytes()).value, "UTF-8"));
 				}
 				else if (id.startsWith("setstatus-"))
 				{

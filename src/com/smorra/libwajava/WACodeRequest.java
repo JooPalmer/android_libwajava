@@ -71,7 +71,7 @@ public class WACodeRequest implements SSLClientCallback
 			int idx = buffer.indexOf("\r\n\r\n");
 			String json = buffer.substring(idx + 4);
 			JSONObject pages = new JSONObject(json);
-			callback.onFinish(pages);
+			callback.onCodeRequestFinish(pages);
 		}
 		catch (Exception e)
 		{

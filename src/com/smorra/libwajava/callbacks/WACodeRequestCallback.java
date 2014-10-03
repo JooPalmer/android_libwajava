@@ -5,6 +5,6 @@ import org.json.JSONObject;
 public interface WACodeRequestCallback
 {
 
-	void onFinish(JSONObject json);
+	void onCodeRequestFinish(JSONObject json);
 
 }

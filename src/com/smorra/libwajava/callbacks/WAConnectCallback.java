@@ -7,6 +7,6 @@ public interface WAConnectCallback
 	{
 		SOCKET_ERROR, NOT_AUTHORIZED
 	};
-	public void onConnect();
+	public void onConnectSuccess();
 	public void onConnectFailure(Reason reason);
 }
