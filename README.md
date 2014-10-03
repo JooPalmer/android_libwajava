@@ -12,7 +12,7 @@ client.connect(new WAConnectCallback()
 {
 
   @Override
-	public void onConnect()
+	public void onConnectSuccess()
 	{
 		try
 		{
