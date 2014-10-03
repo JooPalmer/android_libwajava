@@ -1,4 +1,6 @@
-package com.smorra.libwajava;
+package com.smorra.libwajava.callbacks;
+
+import com.smorra.libwajava.WAMessage;
 
 public interface WAMessageCallback
 {

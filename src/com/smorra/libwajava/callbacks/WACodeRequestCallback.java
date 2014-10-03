@@ -1,4 +1,4 @@
-package com.smorra.libwajava;
+package com.smorra.libwajava.callbacks;
 
 import org.json.JSONObject;
 

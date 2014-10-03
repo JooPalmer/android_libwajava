@@ -11,6 +11,7 @@ import org.json.JSONObject;
 
 import com.smorra.asyncsocket.SSLClient;
 import com.smorra.asyncsocket.SSLClientCallback;
+import com.smorra.libwajava.callbacks.WACodeRequestCallback;
 
 public class WACodeRequest implements SSLClientCallback
 {

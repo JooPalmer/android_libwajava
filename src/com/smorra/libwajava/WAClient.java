@@ -5,17 +5,27 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.LinkedList;
-import java.util.Queue;
+import java.util.HashMap;
 
 import javax.xml.parsers.ParserConfigurationException;
 
 import org.xml.sax.SAXException;
 
-import com.smorra.libwajava.WAConnectCallback.Reason;
 import com.smorra.libwajava.WAMessage.Type;
+import com.smorra.libwajava.callbacks.WAConnectCallback;
+import com.smorra.libwajava.callbacks.WACreateGroupCallback;
+import com.smorra.libwajava.callbacks.WADisconnectCallback;
+import com.smorra.libwajava.callbacks.WAFillGroupCallback;
+import com.smorra.libwajava.callbacks.WAGroupCallback;
+import com.smorra.libwajava.callbacks.WAIqCallback;
+import com.smorra.libwajava.callbacks.WALastSeenCallback;
+import com.smorra.libwajava.callbacks.WAMessageCallback;
+import com.smorra.libwajava.callbacks.WAReceiptCallback;
+import com.smorra.libwajava.callbacks.WAStatusCallback;
+import com.smorra.libwajava.callbacks.WAConnectCallback.Reason;
 
 import android.util.Base64;
+import android.util.Pair;
 
 public class WAClient implements WACallbackRaw
 {
@@ -26,8 +36,15 @@ public class WAClient implements WACallbackRaw
 	WADisconnectCallback disconnectCB;
 	WAMessageCallback messageCB;
 	WAReceiptCallback receiptCB;
+	WAConnectCallback connectCallback;
+	HashMap<String, Object> cbs = new HashMap<String, Object>();
 
-	Queue<Object> callbacks = new LinkedList<Object>();
+	public String generateId(String prefix)
+	{
+		for (int i = 0;; i++)
+			if (!cbs.containsKey(prefix + i))
+				return prefix + i;
+	}
 
 	public WAClient(String phoneNumber, String password, String displayName)
 	{
@@ -53,9 +70,8 @@ public class WAClient implements WACallbackRaw
 
 	public void connect(WAConnectCallback callback) throws IOException
 	{
-		callbacks.add(callback);
+		connectCallback = callback;
 		client = new WAClientRaw(this);
-
 	}
 
 	@Override
@@ -75,42 +91,62 @@ public class WAClient implements WACallbackRaw
 
 	public void getGroups(WAGroupCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
 	{
-		callbacks.add(callback);
-		client.write(WAElement.fromString("<iq id='getgroups-participating' type='get' xmlns='w:g' to='g.us'><list type='participating'></list></iq>"));
+		String id = generateId("getgroups-");
+		cbs.put(id, callback);
+		client.write(WAElement.fromString("<iq id='" + id + "' type='get' xmlns='w:g' to='g.us'><list type='participating'></list></iq>"));
 	}
 
 	public void fillGroup(WAGroup group, WAFillGroupCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
 	{
-		callbacks.add(group);
-		callbacks.add(callback);
-		String str = "<iq id='getgroupparticipants' type='get' xmlns='w:g' to='" + group.id + "@g.us'><list></list></iq>";
+		String id = generateId("fillgroup-");
+		cbs.put(id, Pair.create(group, callback));
+		String str = "<iq id='" + id + "' type='get' xmlns='w:g' to='" + WAUtil.xmlEncode(group.id) + "@g.us'><list/></iq>";
 		client.write(WAElement.fromString(str));
+	}
+
+	public void setStatus(String status, WAIqCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
+	{
+		String id = generateId("setstatus-");
+		cbs.put(id, callback);
+		client.write(WAElement.fromString("<iq to='s.whatsapp.net' type='set' id='" + id + "' xmlns='status'><status>" + WAUtil.xmlEncode(status) + "</status></iq>"));
+	}
+
+	public void createGroup(String subject, WACreateGroupCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
+	{
+		String id = generateId("creategroup-");
+		String cmd = "<iq id='" + id + "' type='set' xmlns='w:g' to='g.us'>";
+		cmd += "<group action='create' subject='" + WAUtil.xmlEncode(subject) + "'></group>";
+		cmd += "</iq>";
+		client.write(WAElement.fromString(cmd));
+		cbs.put(id, callback);
 	}
 
 	public void sendActive() throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
 	{
-		client.write(WAElement.fromString("<presence type='active'></presence>"));
+		client.write(WAElement.fromString("<presence type='active'/>"));
 	}
 
 	public void getLastSeen(String phoneNumber, WALastSeenCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
 	{
-		callbacks.add(callback);
-		client.write(WAElement.fromString("<iq to='" + phoneNumber + "@s.whatsapp.net' type='get' id='lastseen' xmlns='jabber:iq:last'><query/></iq>"));
+		String id = generateId("getlastseen-");
+		cbs.put(id, callback);
+		client.write(WAElement.fromString("<iq to='" + WAUtil.xmlEncode(phoneNumber) + "@s.whatsapp.net' type='get' id='" + id + "' xmlns='jabber:iq:last'><query/></iq>"));
 
 	}
 
 	public void getStatus(String phoneNumber, WAStatusCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
 	{
-		callbacks.add(callback);
-		String str = "<iq to='s.whatsapp.net' type='get' xmlns='status' id='getstatus'>";
-		str += "<status><user jid='" + phoneNumber + "@s.whatsapp.net'/></status>";
+		String id = generateId("getstatus-");
+		cbs.put(id, callback);
+		String str = "<iq to='s.whatsapp.net' type='get' xmlns='status' id='" + id + "'>";
+		str += "<status><user jid='" + WAUtil.xmlEncode(phoneNumber) + "@s.whatsapp.net'/></status>";
 		str += "</iq>";
 		client.write(WAElement.fromString(str));
 	}
 
 	public void sendTyping(String phoneNumber) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
 	{
-		client.write(WAElement.fromString("<chatstate to='" + phoneNumber + "@s.whatsapp.net'><composing/></chatstate>"));
+		client.write(WAElement.fromString("<chatstate to='" + WAUtil.xmlEncode(phoneNumber) + "@s.whatsapp.net'><composing/></chatstate>"));
 	}
 
 	public void sendMessage(String to, String body) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
@@ -135,10 +171,7 @@ public class WAClient implements WACallbackRaw
 			if (xmlnsAttr != null)
 				xmlns = new String(xmlnsAttr.value, "UTF-8");
 			if (name.equals("challenge"))
-			{
 				client.sendResponse(Base64.decode(password, Base64.DEFAULT), element.text, phoneNumber.getBytes());
-				// client.write(WAElement.fromString("<presence name='Stefan Smorra'></presence>"));
-			}
 			else if (name.equals("receipt"))
 			{
 				String from = new String(element.getAttributeByName("from".getBytes()).value, "UTF-8");
@@ -148,14 +181,12 @@ public class WAClient implements WACallbackRaw
 				Date d = new Date(Long.parseLong(t) * 1000);
 				if (receiptCB != null)
 					receiptCB.onReceipt(from, id, d);
-
 			}
 			else if (name.equals("success"))
 			{
 				String str = "<presence name='" + WAUtil.xmlEncode(displayName) + "'></presence>";
 				client.write(WAElement.fromString(str));
-				WAConnectCallback cc = (WAConnectCallback) callbacks.poll();
-				cc.onConnect();
+				connectCallback.onConnect();
 
 			}
 			else if (name.equals("failure"))
@@ -164,8 +195,7 @@ public class WAClient implements WACallbackRaw
 				String childName = new String(child.name, "UTF-8");
 				if (childName.equals("not-authorized"))
 				{
-					WAConnectCallback cc = (WAConnectCallback) callbacks.poll();
-					cc.onConnectFailure(Reason.NOT_AUTHORIZED);
+					connectCallback.onConnectFailure(Reason.NOT_AUTHORIZED);
 					close();
 				}
 			}
@@ -193,21 +223,34 @@ public class WAClient implements WACallbackRaw
 			{
 				String id = new String(element.getAttributeByName("id".getBytes()).value, "UTF-8");
 				System.out.println("IQ WITH ID " + id);
-				if (id.equals("getstatus"))
+
+				if (id.startsWith("getstatus-"))
 				{
-					WAStatusCallback callback = (WAStatusCallback) callbacks.poll();
+					WAStatusCallback callback = (WAStatusCallback) cbs.remove(id);
 					WAElement statusElement = element.getChildrenByName("status".getBytes()).get(0);
 					WAElement userElement = statusElement.getChildrenByName("user".getBytes()).get(0);
 					Date d = new Date(Integer.valueOf(new String(userElement.getAttributeByName("t".getBytes()).value, "UTF-8")) * 1000L);
-					callback.onStatus(d, userElement.text);
+					callback.onStatus(d, new String(userElement.text, "UTF-8"));
 				}
-				else if (id.equals("lastseen"))
+				else if (id.startsWith("creategroup-"))
 				{
-					WALastSeenCallback callback = (WALastSeenCallback) callbacks.poll();
+					WACreateGroupCallback callback = (WACreateGroupCallback) cbs.remove(id);
+					WAElement groupElement = element.getChildrenByName("group".getBytes()).get(0);
+					callback.onCreateGroup(new String(groupElement.getAttributeByName("id".getBytes()).value, "UTF-8"));
+				}
+				else if (id.startsWith("setstatus-"))
+				{
+					WAIqCallback callback = (WAIqCallback) cbs.remove(id);
+					if (callback != null)
+						callback.onSuccess();
+				}
+				else if (id.startsWith("getlastseen-"))
+				{
+					WALastSeenCallback callback = (WALastSeenCallback) cbs.remove(id);
 					WAElement queryElement = element.getChildrenByName("query".getBytes()).get(0);
 					callback.onLastSeen(Integer.parseInt(new String(queryElement.getAttributeByName("seconds".getBytes()).value, "UTF-8")));
 				}
-				else if (id.equals("getgroups-participating"))
+				else if (id.startsWith("getgroups-"))
 				{
 					ArrayList<WAGroup> para = new ArrayList<WAGroup>();
 
@@ -221,15 +264,17 @@ public class WAClient implements WACallbackRaw
 						g.creationDate = new Date(Long.parseLong(new String(group.getAttributeByName("creation".getBytes()).value, "UTF-8")) * 1000);
 						para.add(g);
 					}
-					WAGroupCallback gc = (WAGroupCallback) callbacks.poll();
+					WAGroupCallback gc = (WAGroupCallback) cbs.remove(id);
 					if (gc != null)
 						gc.onGetGroups(para);
 
 				}
-				else if (id.equals("getgroupparticipants"))
+				else if (id.startsWith("fillgroup-"))
 				{
-					WAGroup group = (WAGroup) callbacks.poll();
-					WAFillGroupCallback cb = (WAFillGroupCallback) callbacks.poll();
+					Pair<?, ?> pair = (Pair<?, ?>) cbs.remove(id);
+					WAGroup group = (WAGroup) pair.first;
+					WAFillGroupCallback cb = (WAFillGroupCallback) pair.second;
+
 					for (WAElement participant : element.children)
 					{
 						group.participants.add(new String(participant.getAttributeByName("jid".getBytes()).name, "UTF-8"));
@@ -252,9 +297,8 @@ public class WAClient implements WACallbackRaw
 	@Override
 	public void onConnectFailure()
 	{
-		WAConnectCallback cc = (WAConnectCallback) callbacks.poll();
-		if (cc != null)
-			cc.onConnectFailure(Reason.SOCKET_ERROR);
+		if (connectCallback != null)
+			connectCallback.onConnectFailure(Reason.SOCKET_ERROR);
 	}
 
 	@Override

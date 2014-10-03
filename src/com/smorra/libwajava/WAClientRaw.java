@@ -348,7 +348,7 @@ public class WAClientRaw implements TcpClientCallback
 		return ret;
 	}
 
-	public byte[] getToken(ByteBuffer bb, int token)
+	private byte[] getToken(ByteBuffer bb, int token)
 	{
 		if (token < WATokenMap.primary.length)
 			return WATokenMap.primary[token].getBytes();

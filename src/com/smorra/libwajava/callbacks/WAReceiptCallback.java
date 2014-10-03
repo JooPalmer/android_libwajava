@@ -1,4 +1,4 @@
-package com.smorra.libwajava;
+package com.smorra.libwajava.callbacks;
 
 import java.util.Date;
 

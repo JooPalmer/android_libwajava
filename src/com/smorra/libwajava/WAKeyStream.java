@@ -37,21 +37,18 @@ public class WAKeyStream
 
 	public byte[] encodeMessage(byte[] data, int macOffset, int offset, int length) throws InvalidKeyException, NoSuchAlgorithmException
 	{
-		if (macOffset == data.length)
-		{
-			byte[] encoded = rc4.cipher(data, offset, length);
-			byte[] mac = computeMac(encoded, offset, length);
-			byte[] ret = new byte[encoded.length + 4];
-			System.arraycopy(encoded, 0, ret, 0, macOffset);
-			System.arraycopy(mac, 0, ret, macOffset, 4);
-			return ret;
-		}
 		byte[] encoded = rc4.cipher(data, offset, length);
 		byte[] mac = computeMac(encoded, offset, length);
-		byte[] ret = new byte[encoded.length];
+		byte[] ret;
+		if (macOffset == data.length)
+			ret = new byte[encoded.length + 4];
+		else
+			ret = new byte[encoded.length];
 		System.arraycopy(encoded, 0, ret, 0, macOffset);
 		System.arraycopy(mac, 0, ret, macOffset, 4);
-		System.arraycopy(encoded, macOffset + 4, ret, macOffset + 4, encoded.length - macOffset - 4);
+		if (macOffset != data.length)
+			System.arraycopy(encoded, macOffset + 4, ret, macOffset + 4, encoded.length - macOffset - 4);
+
 		return ret;
 	}
 
