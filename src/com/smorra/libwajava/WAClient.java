@@ -115,7 +115,7 @@ public class WAClient implements WACallbackRaw
 
 	public void sendMessage(String to, String body) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
 	{
-		String str = "<message to='" + to + "@s.whatsapp.net' type='text' id='message-1410987641-1' t='1410987641'>";
+		String str = "<message to='" + WAUtil.xmlEncode(to) + "@s.whatsapp.net' type='text' id='message-1410987641-1' t='1410987641'>";
 		str += "<x xmlns='jabber:x:event'><server/></x>";
 		str += "<notify xmlns='urn:xmpp:whatsapp' name='" + WAUtil.xmlEncode(displayName) + "'/>";
 		str += "<request xmlns='urn:xmpp:receipts'/>";

@@ -231,16 +231,16 @@ public class WAClientRaw implements TcpClientCallback
 				if (buffer.length < 3)
 					break;
 
-				byte[] header = new byte[2];
+				byte[] headerSizePart1 = new byte[2];
 
-				System.arraycopy(buffer, 1, header, 0, 2);
+				System.arraycopy(buffer, 1, headerSizePart1, 0, 2);
 
-				int stanzaLen = ByteBuffer.wrap(header).getShort() & 0xFFFF;
+				int stanzaLen = ByteBuffer.wrap(headerSizePart1).getShort() & 0xFFFF + ((buffer[0] & 0x0F) << 16);
 				if (buffer.length < stanzaLen + 3)
 					break;
 				byte[] data = new byte[stanzaLen];
 				System.arraycopy(buffer, 3, data, 0, data.length);
-				handleStanza(WAUtil.concat(new byte[] { buffer[0] }, WAUtil.concat(header, data)));
+				handleStanza(WAUtil.concat(new byte[] { buffer[0] }, WAUtil.concat(headerSizePart1, data)));
 				byte[] new_buffer = new byte[buffer.length - 3 - data.length];
 				System.arraycopy(buffer, 3 + stanzaLen, new_buffer, 0, new_buffer.length);
 				buffer = new_buffer;
