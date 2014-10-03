@@ -113,7 +113,7 @@ public class WAClient implements WARawCallback
 		client.write(WAElement.fromString("<iq to='s.whatsapp.net' type='set' id='" + id + "' xmlns='status'><status>" + WAUtil.xmlEncode(status) + "</status></iq>"));
 	}
 
-	public void addParticipants(String groupId, ArrayList<String> participants, WAAddParticipantsCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
+	public void addParticipants(String groupId, String[] participants, WAAddParticipantsCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
 	{
 		String id = generateId("addparticipants-");
 		String cmd = "<iq id='" + id + "' type='set' xmlns='w:g' to='" + groupId + "@g.us'>";
@@ -238,6 +238,7 @@ public class WAClient implements WARawCallback
 			else if (name.equals("iq"))
 			{
 				String id = new String(element.getAttributeByName("id".getBytes()).value, "UTF-8");
+				String type = new String(element.getAttributeByName("type".getBytes()).value, "UTF-8");
 				System.out.println("IQ WITH ID " + id);
 
 				if (id.startsWith("getstatus-"))
@@ -252,29 +253,40 @@ public class WAClient implements WARawCallback
 				{
 					Pair<?, ?> pair = (Pair<?, ?>) cbs.remove(id);
 					WAAddParticipantsCallback callback = (WAAddParticipantsCallback) pair.first;
-					ArrayList<?> participants = (ArrayList<?>) pair.second;
-					ArrayList<WAElement> adds = element.getChildrenByName("add".getBytes());
-					ArrayList<Boolean> result = new ArrayList<Boolean>();
-					for (Object participant : participants)
+					String[] participants = (String[]) pair.second;
+					if (type.equals("error"))
 					{
-						String p = (String) participant;
-						boolean found = false;
-						for (WAElement add : adds)
+						callback.onError();
+					}
+					else
+					{
+						ArrayList<WAElement> adds = element.getChildrenByName("add".getBytes());
+						boolean[] result = new boolean[participants.length];
+						int pos = 0;
+						for (String participant : participants)
 						{
-							String phoneNumber = new String(add.getAttributeByName("participant".getBytes()).value, "UTF-8");
-							phoneNumber = phoneNumber.substring(0, phoneNumber.indexOf('@'));
-							String type = new String(add.getAttributeByName("type".getBytes()).value, "UTF-8");
-							if (phoneNumber.equals(p))
+							boolean found = false;
+							for (WAElement add : adds)
 							{
-								result.add(type.equals("success"));
-								found = true;
-								break;
+								String phoneNumber = new String(add.getAttributeByName("participant".getBytes()).value, "UTF-8");
+								phoneNumber = phoneNumber.substring(0, phoneNumber.indexOf('@'));
+								String type2 = new String(add.getAttributeByName("type".getBytes()).value, "UTF-8");
+								if (phoneNumber.equals(participant))
+								{
+									found = true;
+									result[pos] = type2.equals("success");
+									pos++;
+									break;
+								}
+							}
+							if (!found)
+							{
+								result[pos] = false;
+								pos++;
 							}
 						}
-						if (!found)
-							result.add(false);
+						callback.onSuccess(result);
 					}
-					callback.onSuccess(result);
 				}
 				else if (id.startsWith("creategroup-"))
 				{
