@@ -21,6 +21,7 @@ import com.smorra.libwajava.callbacks.WAGroupCallback;
 import com.smorra.libwajava.callbacks.WAIqCallback;
 import com.smorra.libwajava.callbacks.WALastSeenCallback;
 import com.smorra.libwajava.callbacks.WAMessageCallback;
+import com.smorra.libwajava.callbacks.WAProfilePictureCallback;
 import com.smorra.libwajava.callbacks.WARawCallback;
 import com.smorra.libwajava.callbacks.WAReceiptCallback;
 import com.smorra.libwajava.callbacks.WASetSubjectCallback;
@@ -41,12 +42,18 @@ public class WAClient implements WARawCallback
 	WAReceiptCallback receiptCB;
 	WAConnectCallback connectCallback;
 	HashMap<String, Object> cbs = new HashMap<String, Object>();
+	boolean autoReceipt = true;
 
 	public String generateId(String prefix)
 	{
 		for (int i = 0;; i++)
 			if (!cbs.containsKey(prefix + i))
 				return prefix + i;
+	}
+
+	public void setAutoReceipt(boolean autoReceipt)
+	{
+		this.autoReceipt = autoReceipt;
 	}
 
 	public WAClient(String phoneNumber, String password, String displayName)
@@ -138,9 +145,24 @@ public class WAClient implements WARawCallback
 		cbs.put(id, callback);
 	}
 
+	public void getProfilePicture(String phoneNumber, boolean large, WAProfilePictureCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
+	{
+		String id = generateId("getprofilepicture-");
+		String cmd = "<iq id='" + id + "' type='get' xmlns='w:profile:picture' to='" + phoneNumber + "'@s.whatsapp.net'>";
+		cmd += "<picture type='" + (large ? "image" : "preview") + "'/>";
+		cmd += "</iq>";
+		client.write(WAElement.fromString(cmd));
+		cbs.put(id, callback);
+	}
+
 	public void sendActive() throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
 	{
 		client.write(WAElement.fromString("<presence type='active'/>"));
+	}
+
+	public void subscribePresence(String phoneNumber) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
+	{
+		client.write(WAElement.fromString("<presence type='subscribe' to='" + WAUtil.xmlEncode(phoneNumber) + "@s.whatsapp.net'/>"));
 	}
 
 	public void getLastSeen(String phoneNumber, WALastSeenCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
@@ -148,7 +170,6 @@ public class WAClient implements WARawCallback
 		String id = generateId("getlastseen-");
 		cbs.put(id, callback);
 		client.write(WAElement.fromString("<iq to='" + WAUtil.xmlEncode(phoneNumber) + "@s.whatsapp.net' type='get' id='" + id + "' xmlns='jabber:iq:last'><query/></iq>"));
-
 	}
 
 	public void setSubject(String gid, String subject, WASetSubjectCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
@@ -211,7 +232,7 @@ public class WAClient implements WARawCallback
 			}
 			else if (name.equals("success"))
 			{
-				String str = "<presence name='" + WAUtil.xmlEncode(displayName) + "'></presence>";
+				String str = "<presence name='" + WAUtil.xmlEncode(displayName) + "'/>";
 				client.write(WAElement.fromString(str));
 				connectCallback.onConnectSuccess();
 
@@ -231,8 +252,8 @@ public class WAClient implements WARawCallback
 				String id = new String(element.getAttributeByName("id".getBytes()).value, "UTF-8");
 				String from = new String(element.getAttributeByName("from".getBytes()).value, "UTF-8");
 				from = from.substring(0, from.indexOf('@'));
-
-				client.write(WAElement.fromString("<receipt to='" + from + "@s.whatsapp.net' id='" + id + "'/>"));
+				if (autoReceipt)
+					client.write(WAElement.fromString("<receipt to='" + from + "@s.whatsapp.net' id='" + id + "'/>"));
 
 				String type = new String(element.getAttributeByName("type".getBytes()).value, "UTF-8");
 				if (type.equals("text"))
@@ -259,6 +280,19 @@ public class WAClient implements WARawCallback
 					WAElement userElement = statusElement.getChildrenByName("user".getBytes()).get(0);
 					Date d = new Date(Integer.valueOf(new String(userElement.getAttributeByName("t".getBytes()).value, "UTF-8")) * 1000L);
 					callback.onStatus(d, new String(userElement.text, "UTF-8"));
+				}
+				else if (id.startsWith("getprofilepicture-"))
+				{
+					WAProfilePictureCallback callback = (WAProfilePictureCallback) cbs.remove(id);
+					if (type.equals("error"))
+					{
+						callback.onProfilePictureError();
+					}
+					else
+					{
+						WAElement pictureElement = element.getChildrenByName("picture".getBytes()).get(0);
+						callback.onProfilePictureSuccess(pictureElement.text);
+					}
 				}
 				else if (id.startsWith("setsubject-"))
 				{
@@ -320,8 +354,18 @@ public class WAClient implements WARawCallback
 				else if (id.startsWith("getlastseen-"))
 				{
 					WALastSeenCallback callback = (WALastSeenCallback) cbs.remove(id);
-					WAElement queryElement = element.getChildrenByName("query".getBytes()).get(0);
-					callback.onLastSeen(Integer.parseInt(new String(queryElement.getAttributeByName("seconds".getBytes()).value, "UTF-8")));
+					if (callback != null)
+					{
+						if (type.equals("error"))
+						{
+							callback.onLastSeenError();
+						}
+						else
+						{
+							WAElement queryElement = element.getChildrenByName("query".getBytes()).get(0);
+							callback.onLastSeenSuccess(Integer.parseInt(new String(queryElement.getAttributeByName("seconds".getBytes()).value, "UTF-8")));
+						}
+					}
 				}
 				else if (id.startsWith("getgroups-"))
 				{

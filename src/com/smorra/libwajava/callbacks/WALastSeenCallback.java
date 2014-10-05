@@ -2,5 +2,7 @@ package com.smorra.libwajava.callbacks;
 
 public interface WALastSeenCallback
 {
-	public void onLastSeen(int seconds);
+	public void onLastSeenSuccess(int seconds);
+
+	public void onLastSeenError();
 }

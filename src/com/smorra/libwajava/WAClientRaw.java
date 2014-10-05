@@ -96,7 +96,24 @@ public class WAClientRaw implements TcpClientCallback
 		System.arraycopy(data, 0, ret, 3, data.length);
 		return ret;
 	}
-
+	private byte[] getListStart(int len)
+	{
+		if (len == 0)
+		{
+			return new byte[] { 0 };
+		}
+		else if (len < 256)
+		{
+			return new byte[] { (byte) 0xF8, (byte) len };
+		}
+		else
+		{
+			ByteBuffer b = ByteBuffer.allocate(3);
+			b.put((byte) 0xF9);
+			b.putShort((short) len);
+			return b.array();
+		}
+	}
 	private byte[] getXml(WAElement firstChild)
 	{
 		int len = 1;
@@ -120,44 +137,7 @@ public class WAClientRaw implements TcpClientCallback
 		return ret;
 	}
 
-	private int getListSize(ByteBuffer buf, int token)
-	{
-		if (token == 0xF8)
-			return buf.get() & 0xFF;
-		else if (token == 0xF9)
-			return buf.getShort() & 0xFFFF;
-		return 0;
-	}
 
-	private ArrayList<WAElement> readList(ByteBuffer buf, int token)
-	{
-		int size = getListSize(buf, token);
-		ArrayList<WAElement> ret = new ArrayList<WAElement>();
-		for (int i = 0; i < size; i++)
-		{
-			ret.add(nextTreeInternal(buf));
-		}
-		return ret;
-	}
-
-	private byte[] getListStart(int len)
-	{
-		if (len == 0)
-		{
-			return new byte[] { 0 };
-		}
-		else if (len < 256)
-		{
-			return new byte[] { (byte) 0xF8, (byte) len };
-		}
-		else
-		{
-			ByteBuffer b = ByteBuffer.allocate(3);
-			b.put((byte) 0xF9);
-			b.putShort((short) len);
-			return b.array();
-		}
-	}
 
 	private byte[] getBytes(byte[] bytes)
 	{
@@ -256,8 +236,9 @@ public class WAClientRaw implements TcpClientCallback
 	private void handleStanza(byte[] d) throws ParserConfigurationException, SAXException, IOException, InvalidKeyException, NoSuchAlgorithmException
 	{
 		ByteBuffer buf = ByteBuffer.wrap(d);
-		int flags = buf.get() >> 4;
-		int stanzaSize = buf.getShort() & 0xFFFF; // skip size
+		int firstByte = buf.get() & 0xFF;
+		int flags = firstByte >> 4;
+		int stanzaSize = (buf.getShort() & 0xFFFF) | (firstByte & 0x0F); // skip size
 		if ((flags & 8) != 0)
 		{
 			byte[] new_d = new byte[d.length - 3];
@@ -266,7 +247,7 @@ public class WAClientRaw implements TcpClientCallback
 			int realsize = stanzaSize - 4;
 			byte[] decrypted = inputKeystream.decodeMessage(new_d, realsize, 0, realsize);
 
-			WAElement read = nextTreeInternal(ByteBuffer.wrap(decrypted));
+			WAElement read = TreeConverter.nextTreeInternal(ByteBuffer.wrap(decrypted));
 			if (read != null)
 			{
 				System.out.println("Read: " + new String(read.serialize()));
@@ -278,140 +259,15 @@ public class WAClientRaw implements TcpClientCallback
 		}
 		else
 		{
-			WAElement read = nextTreeInternal(buf);
+			WAElement read = TreeConverter.nextTreeInternal(buf);
 			System.out.println("Read: " + new String(read.serialize()));
 			callback.onRead(read);
 		}
 	}
 
-	private WAElement nextTreeInternal(ByteBuffer buf)
-	{
-		int token = buf.get() & 0xFF;
-		int size = 0;
-		if (token == 0xF8)
-			size = buf.get() & 0xFF;
-		else if (token == 0xF9)
-			size = buf.getShort() & 0xFFFF;
 
-		token = buf.get() & 0xFF;
-		if (token == 1)
-		{
-			ArrayList<WAAttribute> attributes = readAttributes(buf, size);
-			WAElement ret = new WAElement("start".getBytes());
-			ret.attributes = attributes;
-			return ret;
-		}
-		else if (token == 2)
-			return null;
 
-		byte[] tag = readString(buf, token);
-		ArrayList<WAAttribute> attributes = readAttributes(buf, size);
-		if (size % 2 == 1)
-		{
-			WAElement ret = new WAElement(tag);
-			ret.attributes = attributes;
-			return ret;
-		}
-		token = buf.get() & 0xFF;
-		if (isListTag(token))
-		{
-			WAElement ret = new WAElement(tag);
-			ret.attributes = attributes;
-			ret.children = readList(buf, token);
-			return ret;
-		}
 
-		WAElement ret = new WAElement(tag);
-		ret.attributes = attributes;
-		ret.text = readString(buf, token);
-		return ret;
-	}
-
-	private boolean isListTag(int token)
-	{
-		return ((token == 248) || (token == 0) || (token == 249));
-	}
-
-	private ArrayList<WAAttribute> readAttributes(ByteBuffer buf, int size)
-	{
-		int n = (size - 2 + size % 2) / 2;
-
-		ArrayList<WAAttribute> ret = new ArrayList<WAAttribute>();
-		for (int i = 0; i < n; i++)
-		{
-			int token = buf.get() & 0xFF;
-			byte[] key = readString(buf, token);
-			token = buf.get() & 0xFF;
-			byte[] value = readString(buf, token);
-
-			ret.add(new WAAttribute(key, value));
-		}
-		return ret;
-	}
-
-	private byte[] getToken(ByteBuffer bb, int token)
-	{
-		if (token < WATokenMap.primary.length)
-			return WATokenMap.primary[token].getBytes();
-		if (token >= 236)
-		{
-			token = bb.get() & 0xFF;
-			return WATokenMap.secondary[token].getBytes();
-		}
-		token = bb.get() & 0xFF;
-		return WATokenMap.primary[token].getBytes();
-	}
-
-	private byte[] readString(ByteBuffer buf, int token)
-	{
-		if (token > 4 && token < 0xf5)
-		{
-			return getToken(buf, token);
-		}
-		else if (token == 0xFC)
-		{
-			int size = buf.get() & 0xFF;
-			return fillArray(buf, size);
-		}
-		else if (token == 0xFD)
-		{
-			int size = readInt24(buf);
-			return fillArray(buf, size);
-		}
-		else if (token == 0xFE)
-		{
-			token = buf.get() & 0xFF;
-			return getToken(buf, token + 0xf5);
-		}
-		else if (token == 0xFA)
-		{
-			byte[] user = readString(buf, buf.get() & 0xFF);
-			byte[] server = readString(buf, buf.get() & 0xFF);
-			if (user.length > 0 && server.length > 0)
-				return WAUtil.concat(WAUtil.concat(user, new byte[] { '@' }), server);
-			else if (server.length > 0)
-				return server;
-
-		}
-		return new byte[] {};
-
-	}
-
-	private int readInt24(ByteBuffer buf)
-	{
-		byte b1 = buf.get();
-		byte b2 = buf.get();
-		byte b3 = buf.get();
-		return (b1 << 16) | (b2 << 8) | b3;
-	}
-
-	private byte[] fillArray(ByteBuffer buf, int size)
-	{
-		byte[] ret = new byte[size];
-		System.arraycopy(buf.array(), buf.position(), ret, 0, size);
-		buf.position(buf.position() + size);
-		return ret;
-	}
 
 	@Override
 	public void onWritten(TcpClient tcpClient)
