@@ -247,7 +247,7 @@ public class WAClientRaw implements TcpClientCallback
 			int realsize = stanzaSize - 4;
 			byte[] decrypted = inputKeystream.decodeMessage(new_d, realsize, 0, realsize);
 
-			WAElement read = TreeConverter.nextTreeInternal(ByteBuffer.wrap(decrypted));
+			WAElement read = WATreeConverter.nextTreeInternal(ByteBuffer.wrap(decrypted));
 			if (read != null)
 			{
 				System.out.println("Read: " + new String(read.serialize()));
@@ -259,7 +259,7 @@ public class WAClientRaw implements TcpClientCallback
 		}
 		else
 		{
-			WAElement read = TreeConverter.nextTreeInternal(buf);
+			WAElement read = WATreeConverter.nextTreeInternal(buf);
 			System.out.println("Read: " + new String(read.serialize()));
 			callback.onRead(read);
 		}

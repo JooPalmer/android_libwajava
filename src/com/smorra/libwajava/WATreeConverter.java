@@ -3,7 +3,7 @@ package com.smorra.libwajava;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
-public class TreeConverter
+public class WATreeConverter
 {
 
 	private static byte[] getToken(ByteBuffer bb, int token)
@@ -37,7 +37,7 @@ public class TreeConverter
 
 	private static byte[] readString(ByteBuffer buf, int token)
 	{
-		if (token > 4 && token < 0xf5)
+		if (token > 2 && token < 0xf5)
 		{
 			return getToken(buf, token);
 		}
@@ -51,11 +51,6 @@ public class TreeConverter
 			int size = readInt24(buf);
 			return fillArray(buf, size);
 		}
-		else if (token == 0xFE)
-		{
-			token = buf.get() & 0xFF;
-			return getToken(buf, token + 0xf5);
-		}
 		else if (token == 0xFA)
 		{
 			byte[] user = readString(buf, buf.get() & 0xFF);
@@ -66,6 +61,7 @@ public class TreeConverter
 				return server;
 
 		}
+		System.out.println("UNRESOLVED TOKEN: " + token);
 		return new byte[] {};
 
 	}
