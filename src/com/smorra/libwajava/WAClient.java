@@ -1,6 +1,7 @@
 package com.smorra.libwajava;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -43,6 +44,7 @@ public class WAClient implements WARawCallback
 	WAConnectCallback connectCallback;
 	HashMap<String, Object> cbs = new HashMap<String, Object>();
 	boolean autoReceipt = true;
+	BigInteger messageIdGenerator = BigInteger.ZERO;
 
 	public String generateId(String prefix)
 	{
@@ -124,7 +126,7 @@ public class WAClient implements WARawCallback
 	public void addParticipants(String groupId, String[] participants, WAAddParticipantsCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
 	{
 		String id = generateId("addparticipants-");
-		String cmd = "<iq id='" + id + "' type='set' xmlns='w:g' to='" + groupId + "@g.us'>";
+		String cmd = "<iq id='" + id + "' type='set' xmlns='w:g' to='" + WAUtil.xmlEncode(groupId) + "@g.us'>";
 		cmd += "<add>";
 		for (String participant : participants)
 		{
@@ -133,6 +135,20 @@ public class WAClient implements WARawCallback
 		cmd += "</add></iq>";
 		cbs.put(id, Pair.create(callback, participants));
 		client.write(WAElement.fromString(cmd));
+	}
+
+	public void test() throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
+	{
+		String cmd = "<message to='491604523088@s.whatsapp.net' type='media' id='message-1412430970-3' t='1412430970'>";
+		cmd += "<x xmlns='jabber:x:event'>";
+		cmd += "<server></server>";
+		cmd += "</x>";
+		cmd += "<notify xmlns='urn:xmpp:whatsapp' name='Stefan Smorra'></notify>";
+		cmd += "<request xmlns='urn:xmpp:receipts'></request>";
+		cmd += "<media xmlns='urn:xmpp:whatsapp:mms' type='image' url='https://mmi208.whatsapp.net/d/Ags8Skz7gXmSFU0p-Pg-RmugAB-qBhUjQNJbB2CamOsN.jpg' file='3de71cfa038ff51b5058cfd5447fd0f2.jpeg' size='10803' hash='HPeySsiC0lmgPxhfJwZ0ZQEXlojZ8dcFJt795oMHKU4='> 12024 byte data</media>";
+		cmd += "</message>";
+		client.write(WAElement.fromString(cmd));
+
 	}
 
 	public void createGroup(String subject, WACreateGroupCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
@@ -197,15 +213,20 @@ public class WAClient implements WARawCallback
 		client.write(WAElement.fromString("<chatstate to='" + WAUtil.xmlEncode(phoneNumber) + "@s.whatsapp.net'><composing/></chatstate>"));
 	}
 
-	public void sendMessage(String to, String body) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
+	public String sendMessage(String to, String body) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
 	{
-		String str = "<message to='" + WAUtil.xmlEncode(to) + "@s.whatsapp.net' type='text' id='message-1410987641-1' t='1410987641'>";
+		long unixTime = System.currentTimeMillis() / 1000L;
+		String id = "message-" + unixTime + "-" + messageIdGenerator;
+		String str = "<message to='" + WAUtil.xmlEncode(to) + "@s.whatsapp.net' type='text' id='" + id + "' t='" + unixTime + "'>";
 		str += "<x xmlns='jabber:x:event'><server/></x>";
 		str += "<notify xmlns='urn:xmpp:whatsapp' name='" + WAUtil.xmlEncode(displayName) + "'/>";
 		str += "<request xmlns='urn:xmpp:receipts'/>";
 		str += "<body>" + WAUtil.xmlEncode(body) + "</body>";
 		str += "</message>";
 		client.write(WAElement.fromString(str));
+		messageIdGenerator = messageIdGenerator.add(BigInteger.ONE);
+		return id;
+
 	}
 
 	@Override
@@ -307,7 +328,8 @@ public class WAClient implements WARawCallback
 					String[] participants = (String[]) pair.second;
 					if (type.equals("error"))
 					{
-						callback.onAddParticipantsError();
+						if (callback != null)
+							callback.onAddParticipantsError();
 					}
 					else
 					{
@@ -336,14 +358,16 @@ public class WAClient implements WARawCallback
 								pos++;
 							}
 						}
-						callback.onAddParticipantsSuccess(result);
+						if (callback != null)
+							callback.onAddParticipantsSuccess(result);
 					}
 				}
 				else if (id.startsWith("creategroup-"))
 				{
 					WACreateGroupCallback callback = (WACreateGroupCallback) cbs.remove(id);
 					WAElement groupElement = element.getChildrenByName("group".getBytes()).get(0);
-					callback.onCreateGroupSuccess(new String(groupElement.getAttributeByName("id".getBytes()).value, "UTF-8"));
+					if (callback != null)
+						callback.onCreateGroupSuccess(new String(groupElement.getAttributeByName("id".getBytes()).value, "UTF-8"));
 				}
 				else if (id.startsWith("setstatus-"))
 				{

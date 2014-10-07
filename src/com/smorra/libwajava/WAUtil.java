@@ -74,7 +74,7 @@ public class WAUtil
 
 			if ((str[i] & 0xFF) >= 128 || (str[i] & 0xFF) < 32 || (str[i] & 0xFF) == '\'' || (str[i] & 0xFF) == '<' || (str[i] & 0xFF) == '>' || (str[i] & 0xFF) == '"')
 			{
-				String entity = "&#" + (str[i] & 0xFF) + ";";
+				String entity = "&#x" + String.format("%02X", str[i]) + ";";
 				ret = concat(ret, entity.getBytes());
 			}
 			else
@@ -92,7 +92,11 @@ public class WAUtil
 			char c = str.charAt(i);
 			if (c >= 128 || c < 32 || c == '\'' || c == '"' || c == '<' || c == '>')
 			{
-				ret += "&#" + (int) c + ";";
+				if (c > 0xFF)
+					ret += "&#x" + String.format("%04x", (int) c) + ";";
+				else
+					ret += "&#x" + String.format("%02x", (int) c) + ";";
+
 			}
 			else
 				ret += c;

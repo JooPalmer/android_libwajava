@@ -3,7 +3,7 @@ package com.smorra.libwajava;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
-public class WATreeConverter
+public class WATreeReader
 {
 
 	private static byte[] getToken(ByteBuffer bb, int token)

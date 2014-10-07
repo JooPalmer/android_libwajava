@@ -60,13 +60,13 @@ public class WAClientRaw implements TcpClientCallback
 		data.put((byte) 4);
 		tcpClient.write(data.array());
 
-		byte[] cmd = getListStart(5);
+		byte[] cmd = WATreeWriter.getListStart(5);
 		cmd = WAUtil.concat(cmd, new byte[] { 1 });
 		ArrayList<WAAttribute> attributes = new ArrayList<WAAttribute>();
 		attributes.add(new WAAttribute("to".getBytes(), WHATSAPP_SERVER.getBytes()));
 		attributes.add(new WAAttribute("resource".getBytes(), (WHATSAPP_DEVICE + '-' + WHATSAPP_VER + '-' + PORT).getBytes()));
-		cmd = WAUtil.concat(cmd, getAttributes(attributes));
-		cmd = WAUtil.concat(getInt24(cmd.length), cmd);
+		cmd = WAUtil.concat(cmd, WATreeWriter.getAttributes(attributes));
+		cmd = WAUtil.concat(WATreeWriter.getInt24(cmd.length), cmd);
 		tcpClient.write(cmd);
 
 	}
@@ -74,11 +74,11 @@ public class WAClientRaw implements TcpClientCallback
 	public void write(WAElement element) throws IOException, InterruptedException, SAXException, ParserConfigurationException, InvalidKeyException, NoSuchAlgorithmException
 	{
 		System.out.println("Write: " + new String(element.serialize(), "UTF-8"));
-		byte[] cmd = getXml(element);
+		byte[] cmd = WATreeWriter.getXml(element);
 
 		if (!encrypt)
 		{
-			cmd = WAUtil.concat(getInt24(cmd.length), cmd);
+			cmd = WAUtil.concat(WATreeWriter.getInt24(cmd.length), cmd);
 			tcpClient.write(cmd);
 		}
 		else
@@ -90,90 +90,17 @@ public class WAClientRaw implements TcpClientCallback
 
 		byte[] data = outputKeystream.encodeMessage(cmd, cmd.length, 0, cmd.length);
 		int len = data.length | (8 << 20);
-		byte[] integer = getInt24(len);
+		byte[] integer = WATreeWriter.getInt24(len);
 		byte[] ret = new byte[3 + data.length];
 		System.arraycopy(integer, 0, ret, 0, 3);
 		System.arraycopy(data, 0, ret, 3, data.length);
 		return ret;
 	}
-	private byte[] getListStart(int len)
-	{
-		if (len == 0)
-		{
-			return new byte[] { 0 };
-		}
-		else if (len < 256)
-		{
-			return new byte[] { (byte) 0xF8, (byte) len };
-		}
-		else
-		{
-			ByteBuffer b = ByteBuffer.allocate(3);
-			b.put((byte) 0xF9);
-			b.putShort((short) len);
-			return b.array();
-		}
-	}
-	private byte[] getXml(WAElement firstChild)
-	{
-		int len = 1;
-		len += firstChild.attributes.size() * 2;
-		if (firstChild.text != null || firstChild.children.size() > 0)
-			len += 1;
-		byte[] ret = getListStart(len);
-		ret = WAUtil.concat(ret, getBytes(firstChild.name));
-		ret = WAUtil.concat(ret, getAttributes(firstChild.attributes));
-
-		if (firstChild.text != null)
-			ret = WAUtil.concat(ret, getBytes(firstChild.text));
-
-		else if (firstChild.children.size() > 0)
-		{
-			ret = WAUtil.concat(ret, getListStart(firstChild.children.size()));
-			for (WAElement element : firstChild.children)
-				ret = WAUtil.concat(ret, getXml(element));
-		}
-
-		return ret;
-	}
 
 
 
-	private byte[] getBytes(byte[] bytes)
-	{
-		byte[] ret;
-		if (bytes.length >= 0x100)
-		{
-			ret = new byte[] { (byte) 0xFD };
-			ret = WAUtil.concat(ret, getInt24(bytes.length));
-		}
-		else
-		{
-			ret = new byte[] { (byte) 0xFC };
-			ret = WAUtil.concat(ret, new byte[] { (byte) bytes.length });
-		}
-		ret = WAUtil.concat(ret, bytes);
 
-		return ret;
-	}
 
-	private byte[] getInt24(int integer)
-	{
-		return new byte[] { (byte) ((integer & 0xFF0000) >> 16), (byte) ((integer & 0xFF00) >> 8), (byte) (integer & 0xFF) };
-	}
-
-	private byte[] getAttributes(ArrayList<WAAttribute> array)
-	{
-		byte[] ret = new byte[0];
-
-		for (WAAttribute attr : array)
-		{
-			ret = WAUtil.concat(ret, getBytes(attr.name));
-			ret = WAUtil.concat(ret, getBytes(attr.value));
-		}
-		return ret;
-
-	}
 
 	@Override
 	public void onConnectFailed(TcpClient tcpClient)
@@ -247,7 +174,7 @@ public class WAClientRaw implements TcpClientCallback
 			int realsize = stanzaSize - 4;
 			byte[] decrypted = inputKeystream.decodeMessage(new_d, realsize, 0, realsize);
 
-			WAElement read = WATreeConverter.nextTreeInternal(ByteBuffer.wrap(decrypted));
+			WAElement read = WATreeReader.nextTreeInternal(ByteBuffer.wrap(decrypted));
 			if (read != null)
 			{
 				System.out.println("Read: " + new String(read.serialize()));
@@ -259,7 +186,7 @@ public class WAClientRaw implements TcpClientCallback
 		}
 		else
 		{
-			WAElement read = WATreeConverter.nextTreeInternal(buf);
+			WAElement read = WATreeReader.nextTreeInternal(buf);
 			System.out.println("Read: " + new String(read.serialize()));
 			callback.onRead(read);
 		}

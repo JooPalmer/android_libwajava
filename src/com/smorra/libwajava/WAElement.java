@@ -30,7 +30,17 @@ public class WAElement
 
 	public byte[] serialize()
 	{
+		return serialize(0);
+	}
+
+	public byte[] serialize(int depth)
+	{
 		byte[] ret = new byte[] { '<' };
+		for (int i = 0; i < depth; i++)
+			ret = WAUtil.concat(new byte[] { ' ', ' ', ' ' }, ret);
+		if (depth != 0)
+			ret = WAUtil.concat(new byte[] { '\n' }, ret);
+
 		ret = WAUtil.concat(ret, name);
 		for (WAAttribute attr : attributes)
 		{
@@ -50,10 +60,18 @@ public class WAElement
 			ret = WAUtil.concat(ret, WAUtil.xmlEncode(text));
 		else if (children.size() != 0)
 			for (WAElement child : children)
-				ret = WAUtil.concat(ret, child.serialize());
+				ret = WAUtil.concat(ret, child.serialize(depth + 1));
+
+		if (text == null)
+		{
+			ret = WAUtil.concat(ret, new byte[] { '\n' });
+			for (int i = 0; i < depth; i++)
+				ret = WAUtil.concat(ret, new byte[] { ' ', ' ', ' ' });
+		}
 		ret = WAUtil.concat(ret, new byte[] { '<', '/' });
 		ret = WAUtil.concat(ret, name);
 		ret = WAUtil.concat(ret, new byte[] { '>' });
+
 		return ret;
 	}
 
