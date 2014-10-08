@@ -107,6 +107,56 @@ public class WAClient implements WARawCallback
 		cbs.put(id, callback);
 		client.write(WAElement.fromString("<iq id='" + id + "' type='get' xmlns='w:g' to='g.us'><list type='participating'></list></iq>"));
 	}
+	
+	
+	/**
+	 * Requests a contacts sync by sending the contacts' <b>numbers</b> to the WhatsApp server, which responds with the numbers 
+	 * it knows, e.g. that have a WhatsApp account.
+	 * @param phoneNumber The user's phonenumber in international format <b>excluding</b> '+'. There exists a version of this method 
+	 * that uses the phonenumber supplied to WAClient in its construct.
+	 * @param numbers The contacts' phonenumbers to be checked. The numbers need to be in international format <b>including</b> '+'. 
+	 * If the number does not start with a '+', this method will simply add a '+' to the number. However, this is very primitive and should not be relied upon. 
+	 * On Android, internationally formatted numbers can be retrieved from the <i>ContactsContract.Data</i> table. Look for values in the column <i>ContactsContract.Data.DATA4</i>
+	 * WHERE <i>ContactsContract.Data.MIMETYPE = Phone.CONTENT_ITEM_TYPE</i> (<i>"mimetype" = "vnd.android.cursor.item/phone_v2"</i>). 
+	 * @param mode Either "full" or "delta".
+	 * @param context Either "registration" or "background";
+	 * @param index Default = 0.
+	 * @param last Default = true.
+	 * @param callback
+	 * @throws InvalidKeyException
+	 * @throws NoSuchAlgorithmException
+	 * @throws IOException
+	 * @throws InterruptedException
+	 * @throws SAXException
+	 * @throws ParserConfigurationException
+	 */
+	public void syncContacts(String phoneNumber, ArrayList<String> numbers, String mode, String context, int index, boolean last, WASyncContactsCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException{
+		String id = generateId("sendsync_");
+		String cmd = "<iq id='" + id + "' type='get' xmlns='urn:xmpp:whatsapp:sync' to='" + phoneNumber + "@s.whatsapp.net'>";
+		cmd += "<sync mode='" + mode + "' context='" + context + "' sid='" + (((System.currentTimeMillis()/1000)+11644477200L)*10000000) + "' index='" + index + "' last='" + String.valueOf(last) + "'>";
+		for (String number : numbers)
+		{
+			if(!number.startsWith("+")){
+				number = "+" + number;
+			}
+			//cmd += "<user='" + WAUtil.xmlEncode(contact) + "'/>";
+			//cmd += "<user '" + number + "'/>";
+			cmd += "<user>" + number + "</user>";
+		}
+		cmd += "</sync></iq>";
+		cbs.put(id, callback);
+		client.write(WAElement.fromString(cmd));
+	}
+	public void syncContacts(ArrayList<String> contacts, String mode, String context, int index, boolean last, WASyncContactsCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException{
+		syncContacts(phoneNumber,contacts,mode,context,index,last,callback);
+	}	
+	public void syncContacts(ArrayList<String> contacts, WASyncContactsCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException{
+		syncContacts(phoneNumber, contacts, "full", "registration", 0, true, callback);
+	}	
+	public void syncContacts(String phoneNumber, ArrayList<String> contacts, WASyncContactsCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException{
+		syncContacts(phoneNumber, contacts, "full", "registration", 0, true, callback);
+	}
+	
 
 	public void fillGroup(WAGroup group, WAFillGroupCallback callback) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
 	{
@@ -422,6 +472,35 @@ public class WAClient implements WARawCallback
 					}
 					if (cb != null)
 						cb.onFillGroup(group);
+				}
+				else if (id.startsWith("sendsync_")){
+					//TODO
+					WAElement syncNode = element.getChildrenByName("sync".getBytes()).get(0);				
+					ArrayList<WAElement> existing = new ArrayList<WAElement>();
+					ArrayList<WAElement> nonexisting = new ArrayList<WAElement>();
+					ArrayList<WAElement> invalid = new ArrayList<WAElement>();
+					
+					ArrayList<WAElement> childIn = syncNode.getChildrenByName("in".getBytes());
+					if(childIn.size()>0){
+						// Some contacts have WhatsApp.
+						WAElement existingNode = childIn.get(0);
+						existing = existingNode.getChildrenByName("user".getBytes());
+					}
+					ArrayList<WAElement> childOut = syncNode.getChildrenByName("out".getBytes());
+					if(childOut.size()>0){
+						// Some contacts have no WhatsApp
+						WAElement nonexistingNode = childOut.get(0);
+						nonexisting = nonexistingNode.getChildrenByName("user".getBytes());
+					}
+					ArrayList<WAElement> childInvalid = syncNode.getChildrenByName("invalid".getBytes());
+					if(childInvalid.size()>0){
+						// Some numbers were invalid
+						WAElement invalidNode = childInvalid.get(0);
+						invalid = invalidNode.getChildrenByName("user".getBytes());
+					}
+					
+					WASyncContactsCallback scc = (WASyncContactsCallback) cbs.remove(id);					
+					scc.onSyncContacts(existing,nonexisting,invalid);
 				}
 				else if (xmlns != null && xmlns.equals("urn:xmpp:ping"))
 				{
