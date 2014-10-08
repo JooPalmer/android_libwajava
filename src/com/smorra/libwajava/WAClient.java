@@ -28,6 +28,7 @@ import com.smorra.libwajava.callbacks.WAReceiptCallback;
 import com.smorra.libwajava.callbacks.WASetSubjectCallback;
 import com.smorra.libwajava.callbacks.WAStatusCallback;
 import com.smorra.libwajava.callbacks.WAConnectCallback.Reason;
+import com.smorra.libwajava.callbacks.WASyncContactsCallback;
 
 import android.util.Base64;
 import android.util.Pair;
