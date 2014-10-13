@@ -263,6 +263,10 @@ public class WAClient implements WARawCallback
 	{
 		client.write(WAElement.fromString("<chatstate to='" + WAUtil.xmlEncode(phoneNumber) + "@s.whatsapp.net'><composing/></chatstate>"));
 	}
+	
+	public void sendTypingPaused(String phoneNumber) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException{
+		client.write(WAElement.fromString("<chatstate to='" + WAUtil.xmlEncode(phoneNumber) + "@s.whatsapp.net'><paused/></chatstate>"));
+	}
 
 	public String sendMessage(String to, String body) throws InvalidKeyException, NoSuchAlgorithmException, IOException, InterruptedException, SAXException, ParserConfigurationException
 	{
